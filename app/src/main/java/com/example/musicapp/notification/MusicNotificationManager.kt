@@ -41,11 +41,13 @@ class MusicNotificationManager(private val context: Context) {
         val pauseIntent = Intent(context, MusicService::class.java).apply { action = MusicService.ACTION_PAUSE }
         val nextIntent = Intent(context, MusicService::class.java).apply { action = MusicService.ACTION_NEXT }
         val prevIntent = Intent(context, MusicService::class.java).apply { action = MusicService.ACTION_PREV }
+        val stopIntent = Intent(context, MusicService::class.java).apply { action = MusicService.ACTION_STOP }
 
         val playPendingIntent = PendingIntent.getService(context, 0, playIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val pausePendingIntent = PendingIntent.getService(context, 1, pauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val nextPendingIntent = PendingIntent.getService(context, 2, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val prevPendingIntent = PendingIntent.getService(context, 3, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val stopPendingIntent = PendingIntent.getService(context, 4, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(song.title)
@@ -55,7 +57,7 @@ class MusicNotificationManager(private val context: Context) {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setStyle(androidx.media.app.NotificationCompat.MediaStyle()
-                .setShowActionsInCompactView(0, 1, 2))
+                .setShowActionsInCompactView(0, 1, 2, 3))
             .addAction(android.R.drawable.ic_media_previous, "Prev", prevPendingIntent)
             .addAction(
                 if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
@@ -63,6 +65,7 @@ class MusicNotificationManager(private val context: Context) {
                 if (isPlaying) pausePendingIntent else playPendingIntent
             )
             .addAction(android.R.drawable.ic_media_next, "Next", nextPendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
 
         return builder.build()

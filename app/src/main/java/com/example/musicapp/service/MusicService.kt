@@ -18,6 +18,7 @@ class MusicService : Service() {
         const val ACTION_PAUSE = "com.example.musicapp.PAUSE"
         const val ACTION_NEXT = "com.example.musicapp.NEXT"
         const val ACTION_PREV = "com.example.musicapp.PREV"
+        const val ACTION_STOP = "com.example.musicapp.STOP"
         const val EXTRA_SONG = "extra_song"
         const val EXTRA_SONG_LIST = "extra_song_list"
         const val EXTRA_INDEX = "extra_index"
@@ -85,6 +86,10 @@ class MusicService : Service() {
             ACTION_PREV -> {
                 Log.d(TAG, "ACTION_PREV")
                 playPrev()
+            }
+            ACTION_STOP -> {
+                Log.d(TAG, "ACTION_STOP")
+                stopSelf()
             }
             "com.example.musicapp.SEEK_TO" -> {
                 val seekTo = intent.getIntExtra("seek_to", 0)
