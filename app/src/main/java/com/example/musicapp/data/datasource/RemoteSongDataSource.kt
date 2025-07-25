@@ -15,16 +15,27 @@ private data class AudiusTrack(
     val id: String,
     val title: String,
     val user: AudiusUser,
-    val artwork: JsonElement?
+    val artwork: JsonElement?,
+    val stream: StreamUrl? = null
 )
 private data class AudiusUser(
     val name: String?,
     val handle: String?
 )
+private data class StreamUrl(val url: String?)
+
+private data class AudiusSearchResponse(val data: List<AudiusTrack>)
 
 private interface AudiusApi {
     @GET("v1/tracks/trending")
     suspend fun getTrendingTracks(@Query("app_name") appName: String): AudiusTrackResponse
+
+    @GET("v1/tracks/search")
+    suspend fun searchTracks(
+        @Query("query") query: String,
+        @Query("limit") limit: Int = 20,
+        @Query("app_name") appName: String = "myapp"
+    ): AudiusSearchResponse
 }
 
 class RemoteSongDataSource : SongDataSource {
@@ -49,6 +60,30 @@ class RemoteSongDataSource : SongDataSource {
                     title = track.title,
                     artist = track.user.name ?: track.user.handle ?: "Unknown",
                     url = "https://api.audius.co/v1/tracks/${track.id}/stream?app_name=myapp",
+                    imageUrl = imageUrl
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    fun searchSongs(keyword: String): List<Song> = runBlocking {
+        try {
+            val response = api.searchTracks(query = keyword)
+            response.data.map { track ->
+                val imageUrl = track.artwork?.let { art ->
+                    if (art.isJsonObject) {
+                        val obj = art.asJsonObject
+                        obj.get("480x480")?.asString ?: obj.get("150x150")?.asString
+                    } else null
+                }
+                Song(
+                    id = track.id,
+                    title = track.title,
+                    artist = track.user.name ?: track.user.handle ?: "Unknown",
+                    url = track.stream?.url ?: "https://api.audius.co/v1/tracks/${track.id}/stream?app_name=myapp",
                     imageUrl = imageUrl
                 )
             }

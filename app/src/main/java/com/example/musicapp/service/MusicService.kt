@@ -40,14 +40,17 @@ class MusicService : Service() {
     private val handler = Handler()
     private val progressRunnable = object : Runnable {
         override fun run() {
-            mediaPlayer?.let {
-                if (it.isPlaying) {
-                    sendProgressBroadcast(it.currentPosition, it.duration)
+            if (isPrepared) {
+                mediaPlayer?.let {
+                    if (it.isPlaying) {
+                        sendProgressBroadcast(it.currentPosition, it.duration)
+                    }
                 }
             }
             handler.postDelayed(this, 500)
         }
     }
+    private var isPrepared = false
 
     inner class MusicBinder : Binder() {
         fun getService(): MusicService = this@MusicService
@@ -77,7 +80,7 @@ class MusicService : Service() {
             }
             ACTION_PAUSE -> {
                 Log.d(TAG, "ACTION_PAUSE")
-                pause()
+                if (isPrepared) pause()
             }
             ACTION_NEXT -> {
                 Log.d(TAG, "ACTION_NEXT")
@@ -93,8 +96,10 @@ class MusicService : Service() {
             }
             "com.example.musicapp.SEEK_TO" -> {
                 val seekTo = intent.getIntExtra("seek_to", 0)
-                Log.d(TAG, "SEEK_TO: $seekTo")
-                mediaPlayer?.seekTo(seekTo)
+                val duration = mediaPlayer?.duration ?: 0
+                if (isPrepared && duration > 0 && seekTo < duration) {
+                    mediaPlayer?.seekTo(seekTo)
+                }
             }
         }
         return START_STICKY
@@ -107,16 +112,21 @@ class MusicService : Service() {
         currentIndex = index
         mediaPlayer?.release()
         mediaPlayer = MediaPlayer()
+        isPrepared = false
         try {
             if (song.url.startsWith("android.resource://")) {
                 Log.d(TAG, "playSong: setDataSource local resource: ${song.url}")
                 mediaPlayer?.setDataSource(this, android.net.Uri.parse(song.url))
                 mediaPlayer?.prepare()
+                isPrepared = true
                 mediaPlayer?.start()
             } else {
                 Log.d(TAG, "playSong: setDataSource url: ${song.url}")
                 mediaPlayer?.setDataSource(song.url)
-                mediaPlayer?.setOnPreparedListener { it.start() }
+                mediaPlayer?.setOnPreparedListener {
+                    isPrepared = true
+                    it.start()
+                }
                 mediaPlayer?.prepareAsync()
             }
             // Gửi notification khi phát nhạc
@@ -149,14 +159,22 @@ class MusicService : Service() {
 
     fun pause() {
         Log.d(TAG, "pause")
-        mediaPlayer?.pause()
-        // Cập nhật notification trạng thái pause
-        currentSong?.let {
-            val notification = notificationManager.getNotification(it, isPlaying = false)
-            startForeground(MusicNotificationManager.NOTIFICATION_ID, notification)
-            sendStateBroadcast(STATE_PAUSED)
+        if (mediaPlayer?.isPlaying == true) {
+            mediaPlayer?.pause()
+            // Gửi progress hiện tại về Activity
+            mediaPlayer?.let {
+                sendProgressBroadcast(it.currentPosition, it.duration)
+            }
+            // Cập nhật notification trạng thái pause
+            currentSong?.let {
+                val notification = notificationManager.getNotification(it, isPlaying = false)
+                startForeground(MusicNotificationManager.NOTIFICATION_ID, notification)
+                sendStateBroadcast(STATE_PAUSED)
+            }
+            handler.removeCallbacks(progressRunnable)
+        } else {
+            Log.d(TAG, "pause ignored: mediaPlayer is not playing")
         }
-        handler.removeCallbacks(progressRunnable)
     }
 
     fun resume() {
@@ -177,6 +195,7 @@ class MusicService : Service() {
         intent.putExtra(EXTRA_SONG, currentSong)
         intent.putExtra(EXTRA_INDEX, currentIndex)
         intent.putExtra(EXTRA_SONG_LIST, ArrayList(songList))
+        intent.putExtra("is_prepared", isPrepared) // Thêm trạng thái isPrepared
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 

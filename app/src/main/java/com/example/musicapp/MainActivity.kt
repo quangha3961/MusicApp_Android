@@ -20,8 +20,10 @@ import com.example.musicapp.view.LocalSongsFragment
 import com.example.musicapp.view.RemoteSongsFragment
 import com.example.musicapp.view.SongsPagerAdapter
 import com.google.android.material.tabs.TabLayoutMediator
+import android.util.Log
+import com.example.musicapp.view.OnSongSelectedListener
 
-class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListener, RemoteSongsFragment.OnSongSelectedListener {
+class MainActivity : AppCompatActivity(), OnSongSelectedListener {
     private lateinit var binding: ActivityMainBinding
     private var currentSong: Song? = null
     private var songList: List<Song> = emptyList()
@@ -75,7 +77,12 @@ class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListe
         val pagerAdapter = SongsPagerAdapter(this)
         binding.viewPager.adapter = pagerAdapter
         TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
-            tab.text = if (position == 0) "Local" else "Remote"
+            tab.text = when (position) {
+                0 -> "Local"
+                1 -> "Remote"
+                2 -> "Search"
+                else -> ""
+            }
         }.attach()
 
         // Đăng ký receiver nhận trạng thái nhạc
@@ -97,15 +104,34 @@ class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListe
                 binding.miniPlayer.btnPlayPause.setImageResource(android.R.drawable.ic_media_play)
                 binding.miniPlayer.btnPlayPause.tag = "paused"
             } else {
-                sendServiceIntent(MusicService.ACTION_PLAY)
+                // Chỉ gửi action play, không truyền song/list/index để Service resume
+                sendServiceIntent(MusicService.ACTION_PLAY, null, null, -1)
                 binding.miniPlayer.btnPlayPause.setImageResource(android.R.drawable.ic_media_pause)
                 binding.miniPlayer.btnPlayPause.tag = "playing"
             }
         }
         // Xử lý next
-        binding.miniPlayer.btnNext.setOnClickListener { sendServiceIntent(MusicService.ACTION_NEXT) }
+        binding.miniPlayer.btnNext.setOnClickListener {
+            // Disable seekBar và nút play/pause trong 2s đầu khi chuyển bài
+            binding.miniPlayer.seekBar.isEnabled = false
+            binding.miniPlayer.btnPlayPause.isEnabled = false
+            handler.postDelayed({
+                binding.miniPlayer.seekBar.isEnabled = true
+                binding.miniPlayer.btnPlayPause.isEnabled = true
+            }, 2000)
+            sendServiceIntent(MusicService.ACTION_NEXT)
+        }
         // Xử lý prev
-        binding.miniPlayer.btnPrev.setOnClickListener { sendServiceIntent(MusicService.ACTION_PREV) }
+        binding.miniPlayer.btnPrev.setOnClickListener {
+            // Disable seekBar và nút play/pause trong 2s đầu khi chuyển bài
+            binding.miniPlayer.seekBar.isEnabled = false
+            binding.miniPlayer.btnPlayPause.isEnabled = false
+            handler.postDelayed({
+                binding.miniPlayer.seekBar.isEnabled = true
+                binding.miniPlayer.btnPlayPause.isEnabled = true
+            }, 2000)
+            sendServiceIntent(MusicService.ACTION_PREV)
+        }
 
         // SeekBar: gửi seek về Service khi người dùng tua
         binding.miniPlayer.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -123,6 +149,7 @@ class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListe
 
     // Callback khi chọn bài hát từ fragment
     override fun onSongSelected(song: Song, list: List<Song>, index: Int) {
+        Log.d("MainActivity", "onSongSelected: ${song.title}")
         songList = list
         currentIndex = index
         currentSong = song
@@ -130,7 +157,14 @@ class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListe
         binding.miniPlayer.btnPlayPause.setImageResource(android.R.drawable.ic_media_pause)
         binding.miniPlayer.btnPlayPause.tag = "playing"
         binding.miniPlayer.root.visibility = View.VISIBLE
-        sendServiceIntent(MusicService.ACTION_PLAY, song, list, index)
+        // Disable seekBar và nút play/pause trong 2s đầu
+        binding.miniPlayer.seekBar.isEnabled = false
+        binding.miniPlayer.btnPlayPause.isEnabled = false
+        handler.postDelayed({
+            binding.miniPlayer.seekBar.isEnabled = true
+            binding.miniPlayer.btnPlayPause.isEnabled = true
+        }, 2000)
+        sendServiceIntent(com.example.musicapp.service.MusicService.ACTION_PLAY, song, list, index)
     }
 
     private fun updateMiniPlayer(song: Song) {
@@ -139,7 +173,6 @@ class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListe
             .load(song.imageUrl)
             .placeholder(android.R.drawable.ic_menu_report_image)
             .into(binding.miniPlayer.imgSongThumb)
-        binding.miniPlayer.seekBar.progress = 0
     }
 
     private fun sendServiceIntent(action: String, song: Song? = currentSong, list: List<Song>? = songList, index: Int = currentIndex) {
@@ -154,10 +187,11 @@ class MainActivity : AppCompatActivity(), LocalSongsFragment.OnSongSelectedListe
     }
 
     private fun sendSeekToService(progress: Int) {
-        // Gửi intent custom tới Service để tua nhạc
-        val intent = Intent(this, MusicService::class.java)
+        val duration = binding.miniPlayer.seekBar.max
+        val safeProgress = if (progress >= duration) duration - 1 else progress
+        val intent = Intent(this, com.example.musicapp.service.MusicService::class.java)
         intent.action = "com.example.musicapp.SEEK_TO"
-        intent.putExtra("seek_to", progress)
+        intent.putExtra("seek_to", safeProgress)
         startService(intent)
     }
 

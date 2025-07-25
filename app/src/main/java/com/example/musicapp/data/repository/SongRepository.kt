@@ -8,7 +8,7 @@ class SongRepository(
     private val remote: SongDataSource
 ) {
     fun getSongs(): List<Song> {
-        // Kết hợp cả local và remote
+
         return local.getSongs() + remote.getSongs()
     }
 } 
